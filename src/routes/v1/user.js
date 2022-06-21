@@ -6,6 +6,7 @@ const { mySQLconfig, jwtSecret } = require('../../config');
 
 const authSchemas = require('../../models/authSchemas');
 
+const { isLoggedIn } = require('../../middleware/authorization');
 const validation = require('../../middleware/validation');
 
 const router = express.Router();
@@ -87,6 +88,53 @@ router.post(
     } catch (err) {
       console.log(err);
       return res.status(500).send({ error: 'Something went wrong' });
+    }
+  }
+);
+
+// Change password
+router.post(
+  '/change_password',
+  isLoggedIn,
+  validation(authSchemas, 'changePasswordSchema'),
+  async (req, res) => {
+    try {
+      const con = await mysql.createConnection(mySQLconfig);
+      const [data] = await con.execute(`
+          SELECT id, password FROM user
+          WHERE id=${mysql.escape(req.user.id)}
+          LIMIT 1
+          `);
+      const isAuthed = bcrypt.compareSync(
+        req.body.oldPassword,
+        data[0].password
+      );
+
+      if (isAuthed) {
+        const [dbRes] = await con.execute(`
+            UPDATE user
+            SET password = ${mysql.escape(
+              bcrypt.hashSync(req.body.newPassword, 10)
+            )}
+            WHERE id=${mysql.escape(req.user.id)};
+            `);
+        if (!dbRes.affectedRows) {
+          await con.end();
+          return res
+            .status(500)
+            .send({ error: 'Something went wrong try again later' });
+        }
+
+        await con.end();
+        return res.send({ msg: 'Password changed.' });
+      }
+
+      await con.end();
+
+      return res.status(400).send({ error: 'Incorrect old password.' });
+    } catch (err) {
+      console.log(err);
+      return res.status(500).send({ error: 'Server error try again later' });
     }
   }
 );
