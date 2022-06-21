@@ -9,6 +9,7 @@ app.use(express.json());
 app.use(cors());
 
 // Routes
+app.use('/user', require('./routes/v1/user'));
 
 // Testing
 app.get('/', (req, res) => {
