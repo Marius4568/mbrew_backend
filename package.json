@@ -1,6 +1,7 @@
 {
   "name": "mbrew_backend",
   "version": "1.0.0",
+  "main": "web.js",
   "scripts": {
     "start": "node src/app",
     "dev": "nodemon src/app"
@@ -24,5 +25,8 @@
     "eslint-plugin-prettier": "^4.0.0",
     "nodemon": "^2.0.16",
     "prettier": "^2.7.1"
+  },
+  "engines": {
+    "node": "14.x"
   }
 }

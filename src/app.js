@@ -13,7 +13,7 @@ app.use('/user', require('./routes/v1/user'));
 
 // Testing
 app.get('/', (req, res) => {
-  res.send('Get request is working.');
+  res.send({ msg: 'Get request is working.' });
 });
 
 app.all('*', (req, res) => res.status(404).send({ error: 'Page not found' }));
