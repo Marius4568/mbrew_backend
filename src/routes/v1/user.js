@@ -61,7 +61,7 @@ router.post(
       const con = await mysql.createConnection(mySQLconfig);
 
       const [data] = await con.execute(`
-    SELECT id, password FROM user
+    SELECT id, password, first_name, last_name, email FROM user
     WHERE email = ${mysql.escape(req.body.email)}
     LIMIT 1`);
 
@@ -81,7 +81,14 @@ router.post(
           { id: data[0].id, email: data[0].email },
           jwtSecret
         );
-        return res.send({ msg: 'Successfully logged in', token });
+
+        const userData = {
+          firstName: data[0].first_name,
+          lastName: data[0].last_name,
+          email: data[0].email,
+        };
+
+        return res.send({ msg: 'Successfully logged in', token, userData });
       }
 
       return res.send({ error: 'incorrect email or password' });
