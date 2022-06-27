@@ -10,6 +10,7 @@ app.use(cors());
 
 // Routes
 app.use('/user', require('./routes/v1/user'));
+app.use('/stripe', require('./routes/v1/stripe'));
 
 // Testing
 app.get('/', (req, res) => {
