@@ -2,7 +2,10 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { mySQLconfig, jwtSecret } = require('../../config');
+
+require('dotenv').config();
 
 const authSchemas = require('../../models/authSchemas');
 
@@ -17,6 +20,17 @@ router.post(
   validation(authSchemas, 'registerSchema'),
   async (req, res) => {
     try {
+      // Add customer on stripe
+      const customer = await stripe.customers.create({
+        name: `${req.body.firstName} ${req.body.lastName}`,
+        email: req.body.email,
+      });
+      if (!customer.id) {
+        return res.status(500).send({
+          error: 'Something wrong with the server. Please try again later',
+        });
+      }
+
       const hashedPassword = await bcrypt.hashSync(req.body.password, 10);
 
       const con = await mysql.createConnection(mySQLconfig);
@@ -32,10 +46,12 @@ router.post(
       }
 
       const [data] = await con.execute(`
-    INSERT INTO user (first_name, last_name, password, email)
+    INSERT INTO user (first_name, last_name, password, email, stripe_id)
     VALUES (${mysql.escape(req.body.firstName)}, ${mysql.escape(
         req.body.lastName
-      )}, ${mysql.escape(hashedPassword)}, ${mysql.escape(req.body.email)})
+      )}, ${mysql.escape(hashedPassword)}, ${mysql.escape(
+        req.body.email
+      )}, ${mysql.escape(customer.id)})
     `);
       await con.end();
 
@@ -145,5 +161,31 @@ router.post(
     }
   }
 );
+
+// Get user data
+router.get('/get_data', isLoggedIn, async (req, res) => {
+  try {
+    const con = await mysql.createConnection(mySQLconfig);
+
+    const [data] = await con.execute(`
+    SELECT first_name, last_name, 
+    email, id, stripe_id
+    FROM user
+    WHERE id = ${mysql.escape(req.user.id)} 
+`);
+
+    if (data.length !== 1) {
+      await con.end();
+      return res
+        .status(500)
+        .send({ error: `Sorry couldn't retrieve such user.` });
+    }
+    await con.end();
+    return res.send({ user: data });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).send({ error: 'Server error. Try again later.' });
+  }
+});
 
 module.exports = router;
