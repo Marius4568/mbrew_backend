@@ -173,7 +173,7 @@ router.get('/get_order_data', async (req, res) => {
 const getPayments = async (customerId) => {
   const payments = await stripe.paymentIntents.list({
     customer: customerId,
-    limit: 3,
+    limit: 10,
   });
   return payments;
 };
