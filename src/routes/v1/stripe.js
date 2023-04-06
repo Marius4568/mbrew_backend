@@ -80,7 +80,7 @@ router.post('/create_checkout_session', async (req, res) => {
               product_data: {
                 name: productItem.title,
                 images: [
-                  productItem.image.data.attributes.formats.thumbnail.url,
+                  productItem.image.data[0].attributes.formats.thumbnail.url,
                 ],
               },
               unit_amount: productItem.price * 100,
@@ -123,7 +123,7 @@ router.post('/create_checkout_session', async (req, res) => {
               product_data: {
                 name: productItem.title,
                 images: [
-                  productItem.image.data.attributes.formats.thumbnail.url,
+                  productItem.image.data[0].attributes.formats.thumbnail.url,
                 ],
               },
               unit_amount: productItem.price * 100,
