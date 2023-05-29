@@ -1,4 +1,4 @@
-const Joi = require('joi');
+import Joi from 'joi';
 
 const registerSchema = Joi.object({
   firstName: Joi.string().trim().required(),
@@ -17,7 +17,7 @@ const changePasswordSchema = Joi.object({
   newPassword: Joi.string().required(),
 });
 
-module.exports = {
+export default {
   registerSchema,
   loginSchema,
   changePasswordSchema,

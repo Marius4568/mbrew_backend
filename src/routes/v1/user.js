@@ -1,16 +1,16 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const mysql = require('mysql2/promise');
-const jwt = require('jsonwebtoken');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { mySQLconfig, jwtSecret } = require('../../config');
+import express from 'express';
+import { nanoid } from 'nanoid';
+import bcrypt from 'bcrypt';
+import mysql from 'mysql2/promise';
+import jwt from 'jsonwebtoken';
+import Stripe from 'stripe';
 
-require('dotenv').config();
+import { mySQLconfig, jwtSecret } from '../../config.js';
+import authSchemas from '../../models/authSchemas.js';
+import isLoggedIn from '../../middleware/authorization.js';
+import validation from '../../middleware/validation.js';
 
-const authSchemas = require('../../models/authSchemas');
-
-const { isLoggedIn } = require('../../middleware/authorization');
-const validation = require('../../middleware/validation');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
 
@@ -115,6 +115,57 @@ router.post(
   }
 );
 
+router.post('/guest_login', async (req, res) => {
+  try {
+    const username = `guest_${nanoid(10)}`;
+    const password = nanoid(10);
+    const guestEmail = `${username}@yourwebsite.com`;
+
+    const customer = await stripe.customers.create({
+      name: username,
+      email: guestEmail,
+    });
+
+    const hashedPassword = await bcrypt.hashSync(password, 10);
+
+    const con = await mysql.createConnection(mySQLconfig);
+
+    const [data] = await con.execute(`
+      INSERT INTO user (first_name, last_name, password, email, stripe_id, is_guest)
+      VALUES (${mysql.escape(username)}, ${mysql.escape(
+      username
+    )}, ${mysql.escape(hashedPassword)}, ${mysql.escape(
+      guestEmail
+    )}, ${mysql.escape(customer.id)}, 1)
+    `);
+
+    await con.end();
+
+    if (!data.insertId) {
+      return res.status(500).send({
+        error: 'Something wrong with the server. Please try again later',
+      });
+    }
+
+    const token = jwt.sign({ id: data.insertId, email: guestEmail }, jwtSecret);
+
+    const userData = {
+      firstName: username,
+      lastName: username,
+      email: guestEmail,
+    };
+
+    return res.send({
+      msg: 'Successfully logged in as guest',
+      token,
+      userData,
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).send({ error: 'Server error. Please try again' });
+  }
+});
+
 // Change password
 router.post(
   '/change_password',
@@ -137,8 +188,8 @@ router.post(
         const [dbRes] = await con.execute(`
             UPDATE user
             SET password = ${mysql.escape(
-              bcrypt.hashSync(req.body.newPassword, 10)
-            )}
+          bcrypt.hashSync(req.body.newPassword, 10)
+        )}
             WHERE id=${mysql.escape(req.user.id)};
             `);
         if (!dbRes.affectedRows) {
@@ -188,4 +239,4 @@ router.get('/get_data', isLoggedIn, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

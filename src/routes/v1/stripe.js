@@ -1,14 +1,14 @@
-const express = require('express');
+import express from 'express';
+import { gql, request } from 'graphql-request';
+import fetch from 'node-fetch-commonjs';
+import { config as dotenvConfig } from 'dotenv';
+import stripePackage from 'stripe';
 
-const { gql, request } = require('graphql-request');
+import isLoggedIn from '../../middleware/authorization.js';
 
-const fetch = require('node-fetch-commonjs');
+const stripe = stripePackage(process.env.STRIPE_SECRET_KEY);
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-const { isLoggedIn } = require('../../middleware/authorization');
-
-require('dotenv').config();
+dotenvConfig();
 
 const router = express.Router();
 
@@ -16,8 +16,8 @@ const getStrapiProducts = (products) => {
   const productsQuery = gql`
     query {
       products(filters: { slug: { in: [${products.map(
-        (el) => `"${el.slug}"`
-      )}] } }) {
+    (el) => `"${el.slug}"`
+  )}] } }) {
         data {
           attributes {
             title
@@ -209,4 +209,4 @@ router.get('/get_payments', isLoggedIn, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

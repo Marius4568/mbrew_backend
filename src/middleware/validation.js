@@ -10,4 +10,4 @@ const validation = function (schemas, schema) {
   };
 };
 
-module.exports = validation;
+export default validation;

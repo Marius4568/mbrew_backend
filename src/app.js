@@ -1,7 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-
-const { Port } = require('./config');
+import express from 'express';
+import cors from 'cors';
+import userRoutes from './routes/v1/user.js';
+import stripeRoutes from './routes/v1/stripe.js';
+import { Port } from './config.js';
 
 const app = express();
 
@@ -9,8 +10,8 @@ app.use(express.json());
 app.use(cors());
 
 // Routes
-app.use('/user', require('./routes/v1/user'));
-app.use('/stripe', require('./routes/v1/stripe'));
+app.use('/user', userRoutes);
+app.use('/stripe', stripeRoutes);
 
 // Testing
 app.get('/', (req, res) => {

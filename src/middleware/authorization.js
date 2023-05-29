@@ -1,15 +1,13 @@
-const jwt = require('jsonwebtoken');
-const { jwtSecret } = require('../config');
+import jwt from 'jsonwebtoken';
+import { jwtSecret } from '../config.js';
 
-module.exports = {
-  isLoggedIn: (req, res, next) => {
-    try {
-      const token = req.headers.authorization.split(' ')[1];
-      req.user = jwt.verify(token, jwtSecret);
+export default (req, res, next) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    req.user = jwt.verify(token, jwtSecret);
 
-      return next();
-    } catch (err) {
-      return res.status(400).send({ error: 'User is not logged in.' });
-    }
-  },
+    return next();
+  } catch (err) {
+    return res.status(400).send({ error: 'User is not logged in.' });
+  }
 };
