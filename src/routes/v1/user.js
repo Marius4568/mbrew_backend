@@ -151,7 +151,7 @@ router.post('/guest_login', async (req, res) => {
 
     const userData = {
       firstName: username,
-      lastName: username,
+      lastName: '',
       email: guestEmail,
     };
 
