@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import userRoutes from './routes/v1/user.js';
 import stripeRoutes from './routes/v1/stripe.js';
+import './guestUserCleanup.js';
 import { Port } from './config.js';
 
 const app = express();

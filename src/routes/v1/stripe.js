@@ -16,8 +16,8 @@ const getStrapiProducts = (products) => {
   const productsQuery = gql`
     query {
       products(filters: { slug: { in: [${products.map(
-    (el) => `"${el.slug}"`
-  )}] } }) {
+        (el) => `"${el.slug}"`
+      )}] } }) {
         data {
           attributes {
             title

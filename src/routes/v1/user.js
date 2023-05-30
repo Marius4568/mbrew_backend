@@ -37,7 +37,7 @@ router.post(
 
       const [email] = await con.execute(`
     SELECT email FROM user
-    WHERE email = ${mysql.escape(req.body.email)}
+    WHERE email = ${mysql.escape(req.body.email)} AND deleted = 0
     `);
 
       if (email.length === 1) {
@@ -77,8 +77,8 @@ router.post(
       const con = await mysql.createConnection(mySQLconfig);
 
       const [data] = await con.execute(`
-    SELECT id, password, first_name, last_name, email FROM user
-    WHERE email = ${mysql.escape(req.body.email)}
+     SELECT id, password, first_name, last_name, email FROM user
+    WHERE email = ${mysql.escape(req.body.email)} AND deleted = 0
     LIMIT 1`);
 
       await con.end();
@@ -119,7 +119,7 @@ router.post('/guest_login', async (req, res) => {
   try {
     const username = `guest_${nanoid(10)}`;
     const password = nanoid(10);
-    const guestEmail = `${username}@yourwebsite.com`;
+    const guestEmail = `${username}@website.com`;
 
     const customer = await stripe.customers.create({
       name: username,
@@ -176,7 +176,7 @@ router.post(
       const con = await mysql.createConnection(mySQLconfig);
       const [data] = await con.execute(`
           SELECT id, password FROM user
-          WHERE id=${mysql.escape(req.user.id)}
+          WHERE id=${mysql.escape(req.user.id)} AND deleted = 0
           LIMIT 1
           `);
       const isAuthed = bcrypt.compareSync(
@@ -188,8 +188,8 @@ router.post(
         const [dbRes] = await con.execute(`
             UPDATE user
             SET password = ${mysql.escape(
-          bcrypt.hashSync(req.body.newPassword, 10)
-        )}
+              bcrypt.hashSync(req.body.newPassword, 10)
+            )}
             WHERE id=${mysql.escape(req.user.id)};
             `);
         if (!dbRes.affectedRows) {
@@ -222,7 +222,7 @@ router.get('/get_data', isLoggedIn, async (req, res) => {
     SELECT first_name, last_name, 
     email, id, stripe_id
     FROM user
-    WHERE id = ${mysql.escape(req.user.id)} 
+    WHERE id = ${mysql.escape(req.user.id)} AND deleted = 0
 `);
 
     if (data.length !== 1) {
