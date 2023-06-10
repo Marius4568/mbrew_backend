@@ -46,7 +46,7 @@ OR run in development
 
 **Main:** NodeJS, Express
 
-**Database:** MySQL
+**Database:** Postgre
 
 **Payments:** Stripe
 

@@ -1,26 +1,22 @@
 import cron from 'node-cron';
-import mysql from 'mysql2/promise';
-import { mySQLconfig } from './config.js';
+import { postgresPool } from './config.js';
 
 // Every day at midnight, flag guest users for deletion
 cron.schedule('0 0 * * *', async () => {
   console.log('Flagging old guest users started');
+  const client = await postgresPool.connect();
   try {
-    const con = await mysql.createConnection(mySQLconfig);
-
-    const [results] = await con.execute(`
-        UPDATE user
+    const { rowCount: flaggedRows } = await client.query(`
+        UPDATE users
         SET deleted = 1
-        WHERE is_guest = 1 AND TIMESTAMPDIFF(MINUTE, created_at, NOW()) > 5
+        WHERE is_guest = 1 AND EXTRACT(MINUTE FROM NOW() - created_at) > 5
     `);
 
-    const flaggedRows = results.affectedRows;
     console.log(`Flagged ${flaggedRows} old guest users`);
-
-    await con.end();
   } catch (err) {
     console.error(err);
   } finally {
+    await client.release();
     console.log('Flagging old guest users finished');
   }
 });
@@ -28,22 +24,19 @@ cron.schedule('0 0 * * *', async () => {
 // Every hour, delete up to 100 flagged users
 cron.schedule('0 * * * *', async () => {
   console.log('Deleting flagged users started');
+  const client = await postgresPool.connect();
   try {
-    const con = await mysql.createConnection(mySQLconfig);
-
-    const [results] = await con.execute(`
-      DELETE FROM user
+    const { rowCount: deletedRows } = await client.query(`
+      DELETE FROM users
       WHERE deleted = 1
       LIMIT 100
     `);
 
-    const deletedRows = results.affectedRows;
     console.log(`Deleted ${deletedRows} flagged users`);
-
-    await con.end();
   } catch (err) {
     console.error(err);
   } finally {
+    await client.release();
     console.log('Deleting flagged users finished');
   }
 });

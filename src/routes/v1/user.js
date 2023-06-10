@@ -1,11 +1,10 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt';
-import mysql from 'mysql2/promise';
 import jwt from 'jsonwebtoken';
 import Stripe from 'stripe';
 
-import { mySQLconfig, jwtSecret } from '../../config.js';
+import { jwtSecret, postgresPool as pool } from '../../config.js';
 import authSchemas from '../../models/authSchemas.js';
 import isLoggedIn from '../../middleware/authorization.js';
 import validation from '../../middleware/validation.js';
@@ -33,29 +32,30 @@ router.post(
 
       const hashedPassword = await bcrypt.hashSync(req.body.password, 10);
 
-      const con = await mysql.createConnection(mySQLconfig);
-
-      const [email] = await con.execute(`
-    SELECT email FROM user
-    WHERE email = ${mysql.escape(req.body.email)} AND deleted = 0
-    `);
+      const { rows: email } = await pool.query(
+        `SELECT email FROM users
+         WHERE email = $1 AND deleted = false`,
+        [req.body.email]
+      );
 
       if (email.length === 1) {
-        await con.end();
         return res.status(400).send({ error: 'User already exists.' });
       }
 
-      const [data] = await con.execute(`
-    INSERT INTO user (first_name, last_name, password, email, stripe_id)
-    VALUES (${mysql.escape(req.body.firstName)}, ${mysql.escape(
-        req.body.lastName
-      )}, ${mysql.escape(hashedPassword)}, ${mysql.escape(
-        req.body.email
-      )}, ${mysql.escape(customer.id)})
-    `);
-      await con.end();
+      const { rowCount } = await pool.query(
+        `INSERT INTO users (first_name, last_name, password, email, stripe_id, is_guest)
+   VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          req.body.firstName,
+          req.body.lastName,
+          hashedPassword,
+          req.body.email,
+          customer.id,
+          false, // is_guest
+        ]
+      );
 
-      if (!data.insertId) {
+      if (rowCount === 0) {
         return res.status(500).send({
           error: 'Something wrong with the server. Please try again later',
         });
@@ -74,17 +74,16 @@ router.post(
   validation(authSchemas, 'loginSchema'),
   async (req, res) => {
     try {
-      const con = await mysql.createConnection(mySQLconfig);
-
-      const [data] = await con.execute(`
-     SELECT id, password, first_name, last_name, email FROM user
-    WHERE email = ${mysql.escape(req.body.email)} AND deleted = 0
-    LIMIT 1`);
-
-      await con.end();
+      const { rows: data } = await pool.query(
+        `
+         SELECT id, password, first_name, last_name, email FROM users
+        WHERE email = $1 AND deleted = false
+        LIMIT 1`,
+        [req.body.email]
+      );
 
       if (data.length !== 1) {
-        return res.status(400).send({ error: 'incorrect email or password' });
+        return res.status(400).send({ error: 'Incorrect email or password' });
       }
 
       const isAuthed = await bcrypt.compareSync(
@@ -107,7 +106,7 @@ router.post(
         return res.send({ msg: 'Successfully logged in', token, userData });
       }
 
-      return res.send({ error: 'incorrect email or password' });
+      return res.send({ error: 'Incorrect email or password' });
     } catch (err) {
       console.log(err);
       return res.status(500).send({ error: 'Something went wrong' });
@@ -128,26 +127,21 @@ router.post('/guest_login', async (req, res) => {
 
     const hashedPassword = await bcrypt.hashSync(password, 10);
 
-    const con = await mysql.createConnection(mySQLconfig);
+    const { rows } = await pool.query(
+      `
+  INSERT INTO users (first_name, last_name, password, email, stripe_id, is_guest)
+  VALUES ($1, $2, $3, $4, $5, true)
+  RETURNING id`,
+      [username, username, hashedPassword, guestEmail, customer.id]
+    );
 
-    const [data] = await con.execute(`
-      INSERT INTO user (first_name, last_name, password, email, stripe_id, is_guest)
-      VALUES (${mysql.escape(username)}, ${mysql.escape(
-      username
-    )}, ${mysql.escape(hashedPassword)}, ${mysql.escape(
-      guestEmail
-    )}, ${mysql.escape(customer.id)}, 1)
-    `);
-
-    await con.end();
-
-    if (!data.insertId) {
+    if (rows.length === 0) {
       return res.status(500).send({
         error: 'Something wrong with the server. Please try again later',
       });
     }
 
-    const token = jwt.sign({ id: data.insertId, email: guestEmail }, jwtSecret);
+    const token = jwt.sign({ id: rows[0].id, email: guestEmail }, jwtSecret);
 
     const userData = {
       firstName: username,
@@ -166,72 +160,68 @@ router.post('/guest_login', async (req, res) => {
   }
 });
 
-// Change password
 router.post(
   '/change_password',
   isLoggedIn,
   validation(authSchemas, 'changePasswordSchema'),
   async (req, res) => {
     try {
-      const con = await mysql.createConnection(mySQLconfig);
-      const [data] = await con.execute(`
-          SELECT id, password FROM user
-          WHERE id=${mysql.escape(req.user.id)} AND deleted = 0
-          LIMIT 1
-          `);
+      const { rows: data } = await pool.query(
+        `
+          SELECT id, password FROM users
+          WHERE id=$1 AND deleted = false
+          LIMIT 1`,
+        [req.user.id]
+      );
+
       const isAuthed = bcrypt.compareSync(
         req.body.oldPassword,
         data[0].password
       );
 
       if (isAuthed) {
-        const [dbRes] = await con.execute(`
-            UPDATE user
-            SET password = ${mysql.escape(
-              bcrypt.hashSync(req.body.newPassword, 10)
-            )}
-            WHERE id=${mysql.escape(req.user.id)};
-            `);
-        if (!dbRes.affectedRows) {
-          await con.end();
+        const { rowCount: dbRes } = await pool.query(
+          `
+            UPDATE users
+            SET password = $1
+            WHERE id=$2`,
+          [bcrypt.hashSync(req.body.newPassword, 10), req.user.id]
+        );
+
+        if (dbRes === 0) {
           return res
             .status(500)
-            .send({ error: 'Something went wrong try again later' });
+            .send({ error: 'Something went wrong, try again later' });
         }
 
-        await con.end();
         return res.send({ msg: 'Password changed.' });
       }
-
-      await con.end();
 
       return res.status(400).send({ error: 'Incorrect old password.' });
     } catch (err) {
       console.log(err);
-      return res.status(500).send({ error: 'Server error try again later' });
+      return res.status(500).send({ error: 'Server error, try again later' });
     }
   }
 );
 
-// Get user data
 router.get('/get_data', isLoggedIn, async (req, res) => {
   try {
-    const con = await mysql.createConnection(mySQLconfig);
-
-    const [data] = await con.execute(`
+    const { rows: data } = await pool.query(
+      `
     SELECT first_name, last_name, 
     email, id, stripe_id
-    FROM user
-    WHERE id = ${mysql.escape(req.user.id)} AND deleted = 0
-`);
+    FROM users
+    WHERE id = $1 AND deleted = false`,
+      [req.user.id]
+    );
 
     if (data.length !== 1) {
-      await con.end();
       return res
         .status(500)
         .send({ error: `Sorry couldn't retrieve such user.` });
     }
-    await con.end();
+
     return res.send({ user: data });
   } catch (err) {
     console.log(err);
